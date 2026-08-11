@@ -130,6 +130,32 @@ development rather than production deployments.
 
 ---
 
+## Which One Should I Use?
+
+Ask two questions:
+
+```
+Need data to persist past container removal?
+│
+├─ No  → Anonymous Volume   (disposable, one-off)
+│
+└─ Yes → Edit files directly from the host machine?
+         │
+         ├─ No  → Named Volume   (databases, persists, shareable)
+         │
+         └─ Yes → Bind Mount     (local dev, live host access)
+```
+
+- **Anonymous volume** — you don't care about the data once the container
+  is gone (e.g. a throwaway build cache).
+- **Named volume** — the data must survive and be reusable, but you don't
+  need to open the files yourself (e.g. a database's data directory).
+- **Bind mount** — you need to actively read/edit the files from your host
+  machine (e.g. live-reloading source code, serving a website's files
+  straight from a folder you're editing).
+
+---
+
 ## Quick Comparison
 
 | Type              | Named? | Shared across containers? | Managed by Docker? | Direction        |
