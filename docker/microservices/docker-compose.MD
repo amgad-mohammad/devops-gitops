@@ -101,7 +101,40 @@ here — if the intent was a named volume, the service should instead use
 
 ---
 
-## Common Commands
+## Do You Need a Dockerfile Per Service?
+
+It depends on whether a service is **built** or just **pulled**:
+
+- Services using `build: ./folder` (your own microservices, e.g. `auth`,
+  `ui`, `weather`) need a **Dockerfile** inside that folder — Compose has
+  no other way to turn your source code into an image.
+- Services using `image: ...` (third-party infrastructure you didn't
+  write — a database, Redis, Nginx, etc., like `db` above) need **no**
+  Dockerfile at all. You're just pulling an existing image.
+
+## Project Structure
+
+`docker-compose.yml` lives at the **root** of the project, one level above
+all the service folders. This matters because every `build: ./auth`-style
+path in the compose file is resolved **relative to where the compose file
+sits**. Move the compose file somewhere else and those paths break.
+
+```
+project/
+├── docker-compose.yml    ← must sit here, at the root
+├── auth/
+│   └── Dockerfile         ← your code, needs one
+├── ui/
+│   └── Dockerfile         ← your code, needs one
+├── weather/
+│   └── Dockerfile         ← your code, needs one
+```
+
+Each `build: ./auth` means "look in the `auth` folder, right next to me,
+for a Dockerfile and build from there." The `db` service, by contrast, has
+no folder or Dockerfile at all — it just references `image: mysql:8.0.25`.
+
+---
 
 ```bash
 docker compose up -d      # create + start all services, in the background
