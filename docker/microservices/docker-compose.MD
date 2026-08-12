@@ -99,6 +99,98 @@ bottom declares `db-data` as a **named volume**. Both aren't used together
 here — if the intent was a named volume, the service should instead use
 `db-data:/var/lib/mysql` (no `./`).
 
+⚠️ **Don't hardcode secrets.** The example above has real-looking values
+sitting directly in the YAML (`DB_PASSWORD: my-secret-pw`, `APIKEY: ...`).
+That's fine for a quick demo, but it means:
+
+- Secrets end up in version control if you commit this file.
+- Anyone with read access to the repo can see production credentials.
+- You can't easily use different values per environment (dev/staging/prod)
+  without editing the file itself.
+
+The fix: put secrets in a `.env` file (kept **out** of Git — add it to
+`.gitignore`), and reference them from the compose file instead of writing
+them in directly.
+
+### `.env`
+
+```env
+DB_USER=root
+DB_PASSWORD=my-secret-pw
+DB_NAME=authdb
+MYSQL_ROOT_PASSWORD=my-secret-pw
+WEATHER_APIKEY=6d92c50bdamsh81137f3b87ace1fp1d53eejsnfe818b9dbc83
+```
+
+Docker Compose automatically reads a file named `.env` sitting next to
+`docker-compose.yml` and makes those variables available for substitution
+using `${VARIABLE_NAME}` syntax inside the YAML.
+
+### `docker-compose.yml` (secrets moved to `.env`)
+
+```yaml
+services:
+  auth:
+    restart: always
+    build: ./auth
+    depends_on:
+      - db
+    environment:
+      DB_HOST: db
+      DB_USER: ${DB_USER}          # pulled from .env, not hardcoded
+      DB_PASSWORD: ${DB_PASSWORD}  # pulled from .env, not hardcoded
+      DB_NAME: ${DB_NAME}
+    networks:
+      - app-net
+
+  ui:
+    restart: always
+    build: ./UI
+    depends_on:
+      - auth
+      - weather
+    environment:
+      AUTH_HOST: auth
+      AUTH_PORT: 8080
+      WEATHER_HOST: weather
+      WEATHER_PORT: 5000
+    ports:
+      - "3000:3000"
+    networks:
+      - app-net
+
+  weather:
+    restart: always
+    build: ./weather
+    environment:
+      APIKEY: ${WEATHER_APIKEY}    # pulled from .env, not hardcoded
+    networks:
+      - app-net
+
+  db:
+    restart: always
+    image: mysql:8.0.25
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}  # pulled from .env, not hardcoded
+      MYSQL_DATABASE: ${DB_NAME}
+    networks:
+      - app-net
+    volumes:
+      - ./db-data:/var/lib/mysql
+
+networks:
+  app-net:
+    driver: bridge
+
+volumes:
+  db-data:
+```
+
+`docker compose up -d` picks up `.env` automatically — no extra flag
+needed, as long as it's in the same folder as `docker-compose.yml`. This
+also means you can keep a different `.env` per environment (or per
+teammate) without ever touching the compose file itself.
+
 ---
 
 ## Do You Need a Dockerfile Per Service?
