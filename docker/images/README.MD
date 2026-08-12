@@ -197,3 +197,46 @@ docker push ghcr.io/$YOUR_USERNAME/my_image:latest
 ⚠️ Cloud registries (ECR, GCR, ACR) usually authenticate through their own
 CLI (`aws ecr get-login-password`, `gcloud auth configure-docker`, etc.)
 rather than a plain username/password `docker login`.
+
+
+
+
+# Multi-Stage Builds
+
+**Goal:** smaller final images with fewer unnecessary tools — which also
+means a smaller attack surface (better security).
+
+How it works: a Dockerfile can have **multiple `FROM` stages**. Each stage
+can use a different base image. Only the **last** stage becomes the final
+image — earlier stages are just intermediate steps, and are discarded
+automatically (they aren't saved as separate images).
+
+## Example
+
+```dockerfile
+# build stage
+FROM maven:3.9-eclipse-temurin-17 AS builder
+WORKDIR /build
+COPY pom.xml .
+RUN mvn dependency:go-offline
+COPY src/ ./src
+RUN mvn clean package -DskipTests
+
+# final stage
+FROM eclipse-temurin:17-jre-alpine
+COPY --from=builder /build/target/*.jar /app/app.jar
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+LABEL Name=myapp Version=0.0.1
+EXPOSE 8080
+```
+
+- **Build stage** (`AS builder`) — has the full JDK + Maven, needed to
+  compile the app. This image is large, but that's fine, since it never
+  ships.
+- **Final stage** — starts fresh from a lightweight JRE-only base image,
+  and just copies in the compiled `.jar` with `COPY --from=builder`. No
+  Maven, no source code, no build tools end up in the final image.
+
+The container you actually run in production is built from the **final
+stage only** — the build stage was just a means to produce the `.jar`.
+
